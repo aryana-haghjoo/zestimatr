@@ -68,3 +68,53 @@ class TestComputeCalibrationMetrics:
             'median_uncertainty',
         }
         assert set(cal.keys()) == expected_keys
+
+
+class TestShapeValidation:
+
+    def test_metrics_1d_vs_column_vector(self):
+        z_pred = np.array([1.0, 2.0, 3.0])
+        z_true = z_pred.reshape(-1, 1)  # would silently broadcast to (3, 3)
+        with pytest.raises(ValueError, match='same shape'):
+            compute_metrics(z_pred, z_true)
+
+    def test_metrics_different_lengths(self):
+        with pytest.raises(ValueError, match='same shape'):
+            compute_metrics(np.array([1.0, 2.0, 3.0]), np.array([1.0, 2.0]))
+
+    def test_metrics_length_one_does_not_broadcast(self):
+        with pytest.raises(ValueError, match='same shape'):
+            compute_metrics(np.array([1.0, 2.0, 3.0]), np.array([1.0]))
+
+    def test_calibration_1d_vs_column_vector(self):
+        z = np.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError, match='same shape'):
+            compute_calibration_metrics(z, z.reshape(-1, 1),
+                                        np.full(3, 0.1))
+
+    def test_calibration_different_lengths(self):
+        with pytest.raises(ValueError, match='same shape'):
+            compute_calibration_metrics(np.array([1.0, 2.0, 3.0]),
+                                        np.array([1.0, 2.0]),
+                                        np.full(3, 0.1))
+
+    @pytest.mark.parametrize('z_unc', [
+        np.full(2, 0.1),         # different length
+        np.full((3, 1), 0.1),    # column vector, would broadcast to (3, 3)
+        np.array([0.1]),         # length one, would broadcast
+    ])
+    def test_calibration_uncertainty_shape_mismatch(self, z_unc):
+        z = np.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError, match='z_uncertainties'):
+            compute_calibration_metrics(z, z, z_unc)
+
+    def test_error_message_reports_shapes(self):
+        with pytest.raises(ValueError, match=r'\(3,\).*\(3, 1\)'):
+            compute_metrics(np.zeros(3), np.zeros((3, 1)))
+
+    def test_matching_2d_shapes_accepted(self):
+        z = np.array([[1.0, 2.0], [3.0, 4.0]])
+        m = compute_metrics(z, z)
+        assert m['mae'] == pytest.approx(0.0)
+        cal = compute_calibration_metrics(z, z, np.full_like(z, 0.1))
+        assert cal['frac_1sigma'] == pytest.approx(1.0)

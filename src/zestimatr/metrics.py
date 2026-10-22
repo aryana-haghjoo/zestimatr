@@ -1,6 +1,18 @@
 import numpy as np
 
 
+def _check_same_shape(func_name, **arrays):
+    """Raise ValueError unless all named arrays share one shape."""
+    shapes = {name: arr.shape for name, arr in arrays.items()}
+    if len(set(shapes.values())) > 1:
+        details = ', '.join(f'{name} {shape}' for name, shape in shapes.items())
+        raise ValueError(
+            f'{func_name}: all inputs must have the same shape, got '
+            f'{details}. Inputs are not broadcast; reshape them to match '
+            f'(e.g. with np.ravel) before calling.'
+        )
+
+
 def compute_metrics(z_pred, z_true):
     """
     Compute redshift prediction accuracy metrics.
@@ -20,6 +32,7 @@ def compute_metrics(z_pred, z_true):
     """
     z_pred = np.asarray(z_pred, dtype=np.float64)
     z_true = np.asarray(z_true, dtype=np.float64)
+    _check_same_shape('compute_metrics', z_pred=z_pred, z_true=z_true)
 
     abs_err = np.abs(z_pred - z_true)
     rel_err = abs_err / (1.0 + np.abs(z_true))
@@ -57,6 +70,8 @@ def compute_calibration_metrics(z_pred, z_true, z_uncertainties):
     z_pred = np.asarray(z_pred, dtype=np.float64)
     z_true = np.asarray(z_true, dtype=np.float64)
     z_uncertainties = np.asarray(z_uncertainties, dtype=np.float64)
+    _check_same_shape('compute_calibration_metrics', z_pred=z_pred,
+                      z_true=z_true, z_uncertainties=z_uncertainties)
 
     norm_residuals = (z_pred - z_true) / (z_uncertainties + 1e-12)
     abs_norm_res = np.abs(norm_residuals)
